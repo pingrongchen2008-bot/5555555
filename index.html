@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🌈 文字地下城</title>
+<style>
+:root{color-scheme:dark;--bg:#10151d;--panel:#1a2230;--border:#35445a;--text:#e8edf5;--muted:#9ba9bc;--gold:#ffd477}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;padding:20px 12px;background:radial-gradient(ellipse at top,#253249 0%,var(--bg) 65%);color:var(--text);font-family:Consolas,"Courier New",monospace;display:flex;justify-content:center}
+.game{width:100%;max-width:720px}
+h1{text-align:center;color:var(--gold);font-size:clamp(25px,5vw,34px);margin:8px 0}
+.subtitle{text-align:center;color:var(--muted);margin-bottom:18px;font-family:sans-serif;font-size:14px}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:15px;margin-bottom:13px;box-shadow:0 8px 24px #0003}
+.stats{display:flex;flex-wrap:wrap;gap:12px 20px;justify-content:space-between;font-size:15px}
+.health{color:#ff7777;letter-spacing:2px}
+.map-wrap{overflow-x:auto;text-align:center;padding:8px 0}
+#map{display:inline-block;white-space:pre;line-height:1.55;font-size:clamp(14px,2.8vw,20px);font-weight:bold;letter-spacing:.04em;user-select:none}
+.player-color{animation:rainbow 2s linear infinite;font-weight:900;text-shadow:0 0 8px currentColor}
+@keyframes rainbow{0%{color:#ff4d4d}16%{color:#ffad33}33%{color:#ffff55}50%{color:#4dff88}66%{color:#4dd2ff}83%{color:#bd70ff}100%{color:#ff4d4d}}
+.wall-color{color:#8996aa}.enemy-color{color:#ff7777}.exit-color{color:#74e3a0}.floor-color{color:#42516a}.heal-color{color:#ff73fa}
+.legend{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 16px;font-size:13px;color:var(--muted);margin-top:12px;font-family:sans-serif}
+#message{min-height:44px;line-height:1.6;color:var(--gold);font-size:14px;margin-top:8px}
+h2{font-size:16px;margin:0 0 12px;color:var(--gold)}
+.controls{display:flex;flex-direction:column;align-items:center;gap:8px}
+.control-row{display:flex;justify-content:center;gap:8px}
+button{font:inherit;color:var(--text);background:#29364a;border:1px solid #50627b;border-radius:10px;cursor:pointer;touch-action:manipulation;transition:background .12s,transform .12s}
+button:hover{background:#3a4d67}button:active{transform:scale(.94);background:#526a89}button:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.arrow{width:66px;height:56px;font-size:24px}
+.actions{display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin-top:17px}
+.actions button{padding:10px 16px;font-size:14px}.primary{background:#285d47;border-color:#478967}
+#history{max-height:120px;overflow-y:auto;font-family:sans-serif;font-size:13px;line-height:1.8;color:var(--muted)}
+.history-line{border-bottom:1px solid #ffffff0b;padding:3px 0}
+.help{font-family:sans-serif;font-size:13px;line-height:1.8;color:var(--muted)}.help strong{color:var(--text)}
+@media(max-width:420px){body{padding:12px 8px}.panel{padding:12px 8px}.arrow{width:60px;height:54px}}
+</style>
+</head>
+<body>
+<main class="game">
+<h1>⚔ 文字地下城</h1><div class="subtitle" id="floor-title">第 1 層地下城 · 彩虹主角冒險</div>
+<section class="panel"><div class="stats"><div>生命：<span id="health" class="health">♥ ♥ ♥</span></div><div>回合：<span id="turn">0</span></div><div>擊敗敵人：<span id="kills">0</span></div></div></section>
+<section class="panel">
+<div class="map-wrap"><div id="map" role="img" aria-label="地下城文字地圖"></div></div>
+<div class="legend"><span class="player-color">@ 玩家</span><span class="wall-color"># 牆壁</span><span class="enemy-color">E 敵人</span><span class="exit-color">X 出口</span><span class="heal-color">H 治療泉水</span><span class="floor-color">· 地板</span></div>
+<div id="message" role="status" aria-live="polite">冒險開始！找到出口 X。</div>
+</section>
+<section class="panel"><h2>移動控制</h2><div class="controls">
+<div class="control-row"><button class="arrow" data-dir="up" aria-label="向上">↑</button></div>
+<div class="control-row"><button class="arrow" data-dir="left" aria-label="向左">←</button><button class="arrow" data-dir="down" aria-label="向下">↓</button><button class="arrow" data-dir="right" aria-label="向右">→</button></div>
+</div><div class="actions"><button id="restart" class="primary">重新開始</button><button id="helpButton">操作說明</button></div></section>
+<section class="panel"><h2>冒險紀錄</h2><div id="history" aria-live="polite"></div></section>
+<section class="panel help"><h2>遊戲規則</h2><strong>移動：</strong>W、A、S、D 或方向鍵。<br><strong>回合：</strong>每次成功移動一步，敵人就會行動。<br><strong>牆壁：</strong>不能穿牆，撞牆不消耗回合。<br><strong>戰鬥：</strong>走進敵人所在格即可擊敗敵人。<br><strong>治療泉水 (H)：</strong>踩上去可恢復 1 點生命（上限 3 點）。<br><strong>通關：</strong>共有 3 層，突破第 3 層出口即可獲勝！</section>
+</main>
+<script>
+"use strict";
+const MAPS = [
+ {
+  template: [
+   "###############",
+   "#.....#.......#",
+   "#.##..#..##...#",
+   "#........#....#",
+   "###.####.#.##.#",
+   "#...#....#....#",
+   "#.#.#.##...##.#",
+   "#.#......#....#",
+   "#.#####.##.#..#",
+   "#.............#",
+   "###############"
+  ],
+  playerStart: {x:1, y:1},
+  exit: {x:13, y:9},
+  enemies: [{x:7, y:3, alive:true}, {x:6, y:7, alive:true}, {x:12, y:5, alive:true}],
+  heals: [{x:13, y:1, alive:true}]
+ },
+ {
+  template: [
+   "###############",
+   "#.#.###.#.....#",
+   "#.#.#...#.###.#",
+   "#...###.#.#...#",
+   "###.#...#.#.###",
+   "#...#.###.#...#",
+   "#.###.#...###.#",
+   "#.#...#.#.....#",
+   "#.#.###.#####.#",
+   "#.............#",
+   "###############"
+  ],
+  playerStart: {x:1, y:1},
+  exit: {x:13, y:9},
+  enemies: [{x:7, y:1, alive:true}, {x:3, y:5, alive:true}, {x:11, y:5, alive:true}, {x:7, y:8, alive:true}],
+  heals: [{x:13, y:3, alive:true}]
+ },
+ {
+  template: [
+   "###############",
+   "#.#.###.#.###.#",
+   "#.#.#...#.#...#",
+   "#...#.###.#.#.#",
+   "###.#.....#.#.#",
+   "#...#.###.#.#.#",
+   "#.###.#...#.#.#",
+   "#.#...#.###.#.#",
+   "#.#.###.....#.#",
+   "#.............#",
+   "###############"
+  ],
+  playerStart: {x:1, y:1},
+  exit: {x:13, y:9},
+  enemies: [{x:5, y:2, alive:true}, {x:9, y:2, alive:true}, {x:3, y:6, alive:true}, {x:11, y:6, alive:true}, {x:7, y:4, alive:true}],
+  heals: [{x:1, y:9, alive:true}, {x:13, y:1, alive:true}]
+ }
+];
+
+const DIRECTIONS={up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}};
+let currentFloor,WIDTH,HEIGHT,MAP_TEMPLATE,EXIT;
+let player,enemies,heals,health,turn,kills,gameOver,history;
+
+const mapElement=document.getElementById("map"),healthElement=document.getElementById("health"),turnElement=document.getElementById("turn"),killsElement=document.getElementById("kills"),messageElement=document.getElementById("message"),historyElement=document.getElementById("history"),floorTitleElement=document.getElementById("floor-title");
+
+function loadMap(floorIndex){
+ currentFloor=floorIndex;
+ const data=MAPS[currentFloor];
+ MAP_TEMPLATE=data.template;
+ WIDTH=MAP_TEMPLATE[0].length;
+ HEIGHT=MAP_TEMPLATE.length;
+ EXIT=data.exit;
+ player={...data.playerStart};
+ enemies=data.enemies.map(e=>({...e}));
+ heals=data.heals.map(h=>({...h}));
+ floorTitleElement.textContent=`第 ${currentFloor+1} 層地下城 · 彩虹主角冒險`;
+}
+
+function isInside(x,y){return x>=0&&x<WIDTH&&y>=0&&y<HEIGHT}
+function isWall(x,y){return !isInside(x,y)||MAP_TEMPLATE[y][x]==="#"}
+function enemyAt(x,y){return enemies.find(e=>e.alive&&e.x===x&&e.y===y)}
+function healAt(x,y){return heals.find(h=>h.alive&&h.x===x&&h.y===y)}
+
+function addHistory(message){history.unshift(message);if(history.length>12)history.length=12;historyElement.replaceChildren();history.forEach(entry=>{const line=document.createElement("div");line.className="history-line";line.textContent=entry;historyElement.appendChild(line)})}
+function setMessage(message){messageElement.textContent=message}
+
+function render(){
+ const rows=[];
+ for(let y=0;y<HEIGHT;y++){
+  const cells=[];
+  for(let x=0;x<WIDTH;x++){
+   let symbol="·",cls="floor-color";
+   if(isWall(x,y)){symbol="#";cls="wall-color"}
+   else if(x===EXIT.x&&y===EXIT.y){symbol="X";cls="exit-color"}
+   
+   const heal=healAt(x,y);
+   if(heal){symbol="H";cls="heal-color"}
+   
+   if(enemyAt(x,y)){symbol="E";cls="enemy-color"}
+   if(player.x===x&&player.y===y){symbol="@";cls="player-color"}
+   cells.push('<span class="'+cls+'">'+symbol+'</span>')
+  }
+  rows.push(cells.join(" "))
+ }
+ mapElement.innerHTML=rows.join("\n");
+ healthElement.textContent="♥ ".repeat(Math.max(0,health)).trim()||"0";
+ turnElement.textContent=String(turn);
+ killsElement.textContent=String(kills);
+ document.querySelectorAll("[data-dir]").forEach(b=>{b.disabled=gameOver;b.style.opacity=gameOver?".45":"1"});
+}
+
+function startGame(){
+ loadMap(0);
+ health=3;turn=0;kills=0;gameOver=false;history=[];
+ setMessage("冒險開始！探索第 1 層，找到出口 X。");
+ addHistory("你踏入了地下城第 1 層。");
+ render();
+}
+
+function directionLabel(name){return {up:"上",down:"下",left:"左",right:"右"}[name]||""}
+
+function movePlayer(name){
+ if(gameOver)return;const d=DIRECTIONS[name];if(!d)return;
+ const nx=player.x+d.x,ny=player.y+d.y;
+ if(isWall(nx,ny)){setMessage("前方是牆壁，無法通過！");return}
+ 
+ const target=enemyAt(nx,ny);
+ if(target){
+  target.alive=false;kills++;player.x=nx;player.y=ny;turn++;
+  addHistory("你擊敗了一名敵人！");
+  setMessage("攻擊成功！敵人已被擊敗。");
+  checkVictory();if(!gameOver)moveEnemies();render();return;
+ }
+ 
+ player.x=nx;player.y=ny;turn++;
+ 
+ // 檢查治療泉水
+ const hTarget=healAt(player.x,player.y);
+ if(hTarget){
+  hTarget.alive=false;
+  if(health<3){
+   health++;
+   setMessage("你踩中了治療泉水 H！生命恢復 1 點。");
+   addHistory("你使用了治療泉水，生命 +1。");
+  }else{
+   setMessage("你踩中了治療泉水 H，但生命已滿！");
+   addHistory("你踩中了治療泉水，但生命值已達上限。");
+  }
+ }
+ 
+ if(player.x===EXIT.x&&player.y===EXIT.y){
+  checkVictory();
+  render();
+  return;
+ }
+ 
+ setMessage("你向"+directionLabel(name)+"移動。");
+ moveEnemies();
+ render();
+}
+
+function moveEnemies(){
+ if(gameOver)return;
+ for(const enemy of enemies){
+  if(!enemy.alive)continue;
+  const dx=player.x-enemy.x;
+  const dy=player.y-enemy.y;
+  const distance=Math.abs(dx)+Math.abs(dy);
+  if(distance===1)continue;
+  const candidates=[];
+  if(Math.abs(dx)>=Math.abs(dy)){
+   if(dx)candidates.push({x:Math.sign(dx),y:0});
+   if(dy)candidates.push({x:0,y:Math.sign(dy)});
+  }else{
+   if(dy)candidates.push({x:0,y:Math.sign(dy)});
+   if(dx)candidates.push({x:Math.sign(dx),y:0});
+  }
+  candidates.push({x:0,y:-1},{x:0,y:1},{x:-1,y:0},{x:1,y:0});
+  const visited=new Set();
+  for(const step of candidates){
+   const key=step.x+","+step.y;
+   if(visited.has(key))continue;
+   visited.add(key);
+   const ex=enemy.x+step.x;
+   const ey=enemy.y+step.y;
+   if(isWall(ex,ey))continue;
+   if(ex===player.x&&ey===player.y)continue;
+   if(enemyAt(ex,ey))continue;
+   enemy.x=ex;enemy.y=ey;
+   break;
+  }
+ }
+
+ let damage=0;
+ for(const enemy of enemies){
+  if(!enemy.alive)continue;
+  const distance=Math.abs(player.x-enemy.x)+Math.abs(player.y-enemy.y);
+  if(distance===1)damage++;
+ }
+
+ if(damage>0){
+  health=Math.max(0,health-damage);
+  addHistory("受到 "+damage+" 隻敵人攻擊！生命減少 "+damage+" 點。");
+  if(health<=0){
+   gameOver=true;
+   setMessage("冒險失敗！生命已耗盡，請重新開始。");
+   addHistory("你倒在了地下城中。");
+   return;
+  }
+  setMessage(damage===1?"敵人攻擊了你！剩餘生命："+health:damage+" 隻敵人同時攻擊！剩餘生命："+health);
+ }
+}
+
+function checkVictory(){
+ if(player.x===EXIT.x&&player.y===EXIT.y){
+  if(currentFloor < MAPS.length - 1){
+   currentFloor++;
+   loadMap(currentFloor);
+   setMessage(`成功通過！進入地下城第 ${currentFloor+1} 層。`);
+   addHistory(`你前往了地下城第 ${currentFloor+1} 層。`);
+  }else{
+   gameOver=true;
+   setMessage("恭喜！你成功通過全部 3 層地下城，完成冒險！");
+   addHistory("你征服了所有 3 層地下城，獲得最終勝利！");
+  }
+ }
+}
+
+document.addEventListener("keydown",e=>{const keys={w:"up",arrowup:"up",s:"down",arrowdown:"down",a:"left",arrowleft:"left",d:"right",arrowright:"right"};const dir=keys[e.key.toLowerCase()];if(dir){e.preventDefault();movePlayer(dir)}});
+document.querySelectorAll("[data-dir]").forEach(b=>b.addEventListener("click",()=>movePlayer(b.dataset.dir)));
+document.getElementById("restart").addEventListener("click",startGame);
+document.getElementById("helpButton").addEventListener("click",()=>setMessage("使用 WASD、方向鍵或觸控按鈕移動。尋找 H 恢復生命，擊敗敵人並前往出口 X！"));
+
+startGame();
+</script>
+</body>
+</html>
